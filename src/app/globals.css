@@ -1,0 +1,207 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #16332f;
+  --color-muted: #5d736e;
+  --color-line: #d5e4df;
+  --color-teal: #0f8f84;
+  --color-teal-dark: #0b726a;
+  --color-mint: #e7f6f3;
+  --color-mist: #f3f6f4;
+  --color-deep: #123f3c;
+  --color-amber: #9a6412;
+  --color-amber-bg: #fff6e8;
+  --color-rose: #a33b45;
+  --color-rose-bg: #fff0f1;
+  --font-sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-mist);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: white;
+  padding: 0.7rem 0.85rem;
+  color: var(--color-ink);
+  outline: none;
+}
+
+.textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.input:focus,
+.textarea:focus,
+.select:focus {
+  border-color: var(--color-teal);
+  box-shadow: 0 0 0 3px rgba(15, 143, 132, 0.15);
+}
+
+.label {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--color-teal-dark);
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0.65rem 1.1rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.btn-primary {
+  background: var(--color-teal);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-teal-dark);
+}
+
+.btn-danger {
+  background: white;
+  color: var(--color-rose);
+  border-color: #f0c6cb;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--color-rose-bg);
+}
+
+.btn-ghost {
+  background: white;
+  color: var(--color-ink);
+  border-color: var(--color-line);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--color-teal);
+  color: var(--color-teal-dark);
+}
+
+.card {
+  border: 1px solid var(--color-line);
+  border-radius: 18px;
+  background: white;
+  padding: 1.1rem 1.2rem;
+}
+
+.card-link {
+  display: block;
+  border: 1px solid var(--color-line);
+  border-radius: 18px;
+  background: white;
+  padding: 1rem 1.1rem;
+}
+
+.card-link:hover {
+  border-color: #b7ddd6;
+  box-shadow: 0 8px 24px rgba(18, 63, 60, 0.05);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pill-pending {
+  background: var(--color-amber-bg);
+  color: var(--color-amber);
+}
+
+.pill-approved {
+  background: var(--color-mint);
+  color: var(--color-teal-dark);
+}
+
+.pill-rejected {
+  background: var(--color-rose-bg);
+  color: var(--color-rose);
+}
+
+.pill-ai {
+  background: #e8fbf4;
+  color: #0b7a62;
+}
+
+.flash {
+  margin-bottom: 1rem;
+  border-radius: 14px;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.92rem;
+}
+
+.flash-ok {
+  background: var(--color-mint);
+  color: var(--color-teal-dark);
+}
+
+.flash-bad {
+  background: var(--color-rose-bg);
+  color: var(--color-rose);
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.nav-link:hover,
+.nav-link-active {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}

@@ -1,0 +1,7 @@
+services:
+  redis:
+    image: redis:8
+    container_name: approval-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
