@@ -1,14 +1,17 @@
 import { createClient, SCHEMA_FIELD_TYPE, SCHEMA_VECTOR_FIELD_ALGORITHM } from "redis";
 import { embed, EMBEDDING_DIM, EMBEDDING_MODEL, vectorBuffer } from "@/lib/embed";
 import { sqlAll } from "@/lib/db";
+import { captureKnowledgeVersion, isKnowledgeCurrent, knowledgeVersion } from "@/lib/knowledge-versions";
 
-const INDEX = "kb_idx";
-const MODEL_KEY = "kb:model";
+const namespace = (process.env.KB_PREFIX || "kb").replace(/[^a-z0-9]/gi, "") || "kb";
+const INDEX = `${namespace}_idx`;
+const MODEL_KEY = `${namespace}:model`;
+const CHUNK_PREFIX = `${namespace}:chunk:`;
 
 async function connectRedis() {
   const created = createClient({
     url: process.env.REDIS_URL || "redis://127.0.0.1:6379",
-    socket: { connectTimeout: 2000 },
+    socket: { connectTimeout: 2000, reconnectStrategy: false },
   });
   created.on("error", () => {
     // The caller surfaces connection failures.
@@ -25,6 +28,9 @@ const globalForRedis = globalThis as unknown as {
 };
 
 export type KnowledgeHit = {
+  docId: number;
+  version: string;
+  score: number;
   title: string;
   excerpt: string;
 };
@@ -86,7 +92,7 @@ async function ensureIndex(redis: AppRedis) {
           // The index is recreated below.
         }
       }
-      const stale = await redis.keys("kb:chunk:*");
+      const stale = await redis.keys(`${CHUNK_PREFIX}*`);
       if (stale.length > 0) await redis.del(stale);
       await redis.ft.create(
         INDEX,
@@ -101,7 +107,7 @@ async function ensureIndex(redis: AppRedis) {
             DISTANCE_METRIC: "COSINE",
           },
         },
-        { ON: "HASH", PREFIX: "kb:chunk:" },
+        { ON: "HASH", PREFIX: CHUNK_PREFIX },
       );
       await redis.set(MODEL_KEY, EMBEDDING_MODEL);
     })().catch((error) => {
@@ -127,20 +133,22 @@ async function reindexAllNow() {
   const redis = await client();
   await ensureIndex(redis);
   const docs = sqlAll<StoredDoc>("SELECT id, title, content FROM knowledge_docs ORDER BY id");
-  const stale = await redis.keys("kb:chunk:*");
+  const stale = await redis.keys(`${CHUNK_PREFIX}*`);
   if (stale.length > 0) await redis.del(stale);
   for (const doc of docs) await writeChunks(redis, doc);
   return docs.length;
 }
 
 async function writeChunks(redis: AppRedis, doc: StoredDoc) {
-  const stale = await redis.keys(`kb:chunk:${doc.id}:*`);
+  const version = captureKnowledgeVersion(doc.id) ?? knowledgeVersion(doc.title, doc.content);
+  const stale = await redis.keys(`${CHUNK_PREFIX}${doc.id}:*`);
   if (stale.length > 0) await redis.del(stale);
   const chunks = chunksOf(doc.content);
   for (let index = 0; index < chunks.length; index += 1) {
     const excerpt = chunks[index];
-    await redis.hSet(`kb:chunk:${doc.id}:${index}`, {
+    await redis.hSet(`${CHUNK_PREFIX}${doc.id}:${index}`, {
       doc_id: String(doc.id),
+      version,
       title: doc.title,
       content: excerpt,
       embedding: vectorBuffer(await embed(`${doc.title}\n${excerpt}`, "passage")),
@@ -153,7 +161,7 @@ export async function reindexDocument(id: number) {
   await ensureIndex(redis);
   const doc = sqlAll<StoredDoc>("SELECT id, title, content FROM knowledge_docs WHERE id = ?", id)[0];
   if (!doc) {
-    const stale = await redis.keys(`kb:chunk:${id}:*`);
+    const stale = await redis.keys(`${CHUNK_PREFIX}${id}:*`);
     if (stale.length > 0) await redis.del(stale);
     return;
   }
@@ -162,7 +170,7 @@ export async function reindexDocument(id: number) {
 
 export async function removeDocumentVectors(id: number) {
   const redis = await client();
-  const stale = await redis.keys(`kb:chunk:${id}:*`);
+  const stale = await redis.keys(`${CHUNK_PREFIX}${id}:*`);
   if (stale.length > 0) await redis.del(stale);
 }
 
@@ -196,18 +204,20 @@ export async function searchKnowledge(query: string): Promise<KnowledgeSearch> {
     const result = await redis.ft.search(INDEX, "*=>[KNN 4 @embedding $vec AS score]", {
       PARAMS: { vec: vectorBuffer(await embed(query, "query")) },
       DIALECT: 2,
-      RETURN: ["title", "content", "score"],
+      RETURN: ["doc_id", "version", "title", "content", "score"],
     });
     const ranked = result.documents
       .map((document) => {
         const value = document.value as Record<string, unknown>;
         return {
+          docId: Number(value.doc_id),
+          version: String(value.version ?? ""),
           title: String(value.title ?? ""),
           excerpt: String(value.content ?? "").slice(0, 700),
           score: Number(value.score ?? 1),
         };
       })
-      .filter((item) => item.title && item.excerpt)
+      .filter((item) => item.title && item.excerpt && Number.isFinite(item.score) && isKnowledgeCurrent([item]))
       .sort((left, right) => left.score - right.score);
     const best = ranked[0];
     const hits =
@@ -215,7 +225,7 @@ export async function searchKnowledge(query: string): Promise<KnowledgeSearch> {
         ? ranked
             .filter((item) => item.score <= best.score + 0.03)
             .slice(0, 2)
-            .map(({ title, excerpt }) => ({ title, excerpt }))
+            .map(({ docId, version, score, title, excerpt }) => ({ docId, version, score, title, excerpt }))
         : [];
     return { available: true, hits, error: "" };
   } catch (error) {

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { KnowledgeEditor } from "@/components/knowledge-editor";
 import { Flash, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
 import { deleteKnowledgeAction, reindexKnowledgeAction } from "@/server/actions";

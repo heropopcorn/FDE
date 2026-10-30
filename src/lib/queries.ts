@@ -487,6 +487,49 @@ export function dashboardStats(viewer: { id: number; role: Role }): DashboardSta
   };
 }
 
+export type DashboardChartData = {
+  days: { date: string; label: string; count: number }[];
+  outcomes: { outcome: AiOutcome; count: number }[];
+};
+
+export function dashboardChartData(viewer: { id: number; role: Role }, now = new Date()): DashboardChartData {
+  // Use Beijing calendar days independently of the server's timezone.
+  const today = new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const dates = Array.from({ length: 30 }, (_, index) => {
+    const day = new Date(`${today}T00:00:00.000Z`);
+    day.setUTCDate(day.getUTCDate() - 29 + index);
+    return day.toISOString().slice(0, 10);
+  });
+  const scope = visibleRequestSql("r");
+  const where = viewer.role === "admin" ? "1 = 1" : scope.sql;
+  const params = viewer.role === "admin" ? [] : scope.params(viewer.id);
+  const rows = sqlAll<{ day: string; c: number | bigint }>(
+    `SELECT date(r.created_at, '+8 hours') AS day, COUNT(*) AS c
+     FROM requests r
+     WHERE ${where} AND date(r.created_at, '+8 hours') BETWEEN ? AND ?
+     GROUP BY date(r.created_at, '+8 hours')`,
+    ...params,
+    dates[0],
+    today,
+  );
+  const dayCounts = new Map(rows.map((row) => [row.day, Number(row.c)]));
+  const attempts = sqlAll<{ outcome: AiOutcome; c: number | bigint }>(
+    `SELECT a.outcome, COUNT(*) AS c
+     FROM ai_attempts a JOIN requests r ON r.id = a.request_id
+     WHERE ${where}
+     GROUP BY a.outcome`,
+    ...params,
+  );
+  const outcomeCounts = new Map(attempts.map((row) => [row.outcome, Number(row.c)]));
+  return {
+    days: dates.map((date) => ({ date, label: date.slice(5).replace("-", "/"), count: dayCounts.get(date) ?? 0 })),
+    outcomes: (["approve", "reject", "manual", "error"] as const).map((outcome) => ({
+      outcome,
+      count: outcomeCounts.get(outcome) ?? 0,
+    })),
+  };
+}
+
 export function listApprovals(requestId: number): ApprovalRecord[] {
   return sqlAll<{
     step_id: number;

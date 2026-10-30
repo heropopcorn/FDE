@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>智能审批流程 · 场景智改项目方案汇报</title>
+<style>
+  :root {
+    --paper: #f4f0e6;
+    --ink: #1a2744;
+    --muted: #5c6778;
+    --gold: #b8893d;
+    --navy: #1e3358;
+    --line: #e3d9c6;
+    --card: #fffcf6;
+    --teal: #0f6e68;
+    --soft: #f7f1e4;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #12161c; color: var(--ink); font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif; }
+  button, body { font-family: inherit; }
+  #viewport { height: 100%; display: grid; place-items: center; }
+  #deck { width: 1280px; height: 720px; position: relative; transform-origin: center center; }
+  .slide {
+    position: absolute; inset: 0; display: none; overflow: hidden;
+    background: var(--paper); color: var(--ink);
+    padding: 32px 48px 40px;
+  }
+  .slide.on { display: flex; flex-direction: column; }
+  .slide.cover.on { flex-direction: row; align-items: center; }
+  .kicker { color: var(--gold); font-size: 13px; letter-spacing: .12em; font-weight: 700; }
+  h1 { margin: 6px 0 0; font-size: 32px; line-height: 1.25; font-weight: 800; letter-spacing: .01em; }
+  .rule { width: 52px; height: 4px; background: var(--gold); margin: 10px 0 12px; border-radius: 2px; }
+  .lead { margin: 0 0 14px; color: var(--muted); font-size: 15px; line-height: 1.55; }
+  .foot {
+    margin-top: auto; color: #8a6a3b; font-size: 12px; line-height: 1.45;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { background: var(--navy); color: #fff; text-align: left; font-weight: 700; padding: 8px 10px; }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; background: #fff; }
+  tr:nth-child(even) td { background: #fbf7ef; }
+  .num { color: var(--gold); font-weight: 800; }
+
+  .dark {
+    background:
+      radial-gradient(900px 420px at 88% 70%, rgba(56, 130, 196, .35), transparent 60%),
+      radial-gradient(700px 380px at 70% 20%, rgba(15, 110, 104, .28), transparent 55%),
+      linear-gradient(160deg, #10203c 0%, #0c1830 55%, #16324a 100%);
+    color: #f4f7fb;
+  }
+  .dark .kicker { color: #e2b15a; }
+  .cover { flex-direction: row; gap: 28px; padding: 54px 56px; }
+  .cover-copy { flex: 1.1; display: flex; flex-direction: column; justify-content: center; }
+  .brand { color: #e2b15a; letter-spacing: .16em; font-size: 14px; font-weight: 700; }
+  .cover h1 { font-size: 46px; margin: 18px 0 12px; }
+  .sub { font-size: 20px; color: #d5deea; margin: 0; }
+  .meta { margin-top: 36px; color: #c5d0de; font-size: 16px; line-height: 1.8; }
+  .cover-art { flex: .9; position: relative; height: 520px; }
+  .orb {
+    position: absolute; border: 1px solid rgba(180, 210, 255, .35); border-radius: 28px;
+    background: rgba(255,255,255,.04);
+  }
+  .o1 { width: 250px; height: 170px; right: 8px; top: 8px; }
+  .o2 { width: 200px; height: 140px; right: 140px; top: 168px; }
+  .o3 { width: 150px; height: 108px; right: 16px; top: 330px; }
+  .tag {
+    position: absolute; color: #d7e6ff; font-weight: 800; letter-spacing: .08em;
+  }
+  .tag.a { right: 78px; top: 62px; font-size: 42px; }
+  .tag.b { right: 188px; top: 214px; font-size: 28px; color: #9fd7cf; }
+  .tag.c { right: 52px; top: 364px; font-size: 22px; color: #e2b15a; }
+
+  .split { display: grid; grid-template-columns: 1.05fr .95fr; gap: 22px; min-height: 0; flex: 1; }
+  .roster { display: flex; flex-direction: column; gap: 10px; }
+  .person {
+    display: grid; grid-template-columns: 72px 1fr auto; gap: 12px; align-items: center;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px;
+  }
+  .avatar {
+    width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center;
+    background: #e7f3f1; color: var(--teal); font-weight: 800;
+  }
+  .person b { display: block; font-size: 16px; }
+  .person span { color: var(--muted); font-size: 13px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 18px 14px;
+  }
+  .card h2 { margin: 0 0 8px; font-size: 20px; }
+  .badge { display: inline-block; background: #1e3358; color: #fff; border-radius: 999px; padding: 4px 10px; font-size: 12px; }
+  .slogan { font-size: 26px; font-weight: 800; line-height: 1.45; margin: 16px 0; }
+  .tasks { margin: 0; padding: 0; list-style: none; }
+  .tasks li { padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .tasks b { color: var(--teal); }
+
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; flex: 1; }
+  .step {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px;
+    cursor: pointer; text-align: left; color: inherit;
+  }
+  .step:hover { border-color: var(--gold); }
+  .phase { color: var(--gold); font-size: 13px; font-weight: 800; letter-spacing: .08em; }
+  .step ol { margin: 12px 0 0; padding-left: 18px; line-height: 1.7; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .grid6 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .kv { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .kv .label { color: var(--muted); font-size: 12px; }
+  .kv .value { margin-top: 6px; font-size: 18px; font-weight: 800; line-height: 1.4; }
+  .sentence { background: #1e3358; color: #fff; border-radius: 14px; padding: 16px 18px; font-size: 16px; line-height: 1.65; }
+
+  .chain { display: grid; grid-template-columns: 1fr 28px 1fr 28px 1fr; gap: 8px; align-items: stretch; flex: 1; }
+  .lvl { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .lvl em { color: var(--gold); font-style: normal; font-weight: 800; font-size: 13px; }
+  .lvl h3 { margin: 8px 0; font-size: 20px; }
+  .lvl p { margin: 0; color: #334; line-height: 1.6; font-size: 14px; }
+  .arrow { display: grid; place-items: center; color: var(--gold); font-size: 22px; }
+
+  .layers { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+  .layer { color: #fff; border-radius: 12px; padding: 12px 16px; display: grid; grid-template-columns: 150px 1fr; gap: 12px; align-items: center; }
+  .layer b { display: block; font-size: 16px; }
+  .layer span { display: block; opacity: .8; font-size: 12px; margin-top: 2px; }
+  .layer p { margin: 0; font-size: 14px; line-height: 1.5; }
+  .l1 { background: #6d8ea3; } .l2 { background: #3d6278; } .l3 { background: #243e52; } .l4 { background: #172838; }
+
+  .quad { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; height: 100%; }
+  .cell { border: 1px dashed #d9d0c0; border-radius: 12px; padding: 12px; background: #fff; }
+  .cell.hot { background: #f8f1dc; border: 1px solid var(--gold); }
+  .cell b { display: block; margin-bottom: 6px; }
+  .side { display: grid; grid-template-columns: 1.15fr .85fr; gap: 14px; flex: 1; min-height: 0; }
+  .score { font-size: 42px; font-weight: 800; color: var(--navy); }
+  .score small { font-size: 16px; color: var(--muted); font-weight: 600; }
+
+  .ba { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; }
+  .before, .after { border-radius: 14px; padding: 16px 18px; }
+  .before { background: #f7f4ee; border: 1px solid var(--line); }
+  .after { background: #f4fbf8; border: 1px solid #b7ddd4; }
+  .ba h3 { margin: 0 0 8px; }
+  .ba ol { margin: 0; padding-left: 18px; line-height: 1.7; }
+  .time { margin-top: 12px; font-weight: 800; }
+
+  .demo { display: grid; grid-template-columns: 1.15fr .85fr; gap: 18px; align-items: start; }
+  .mock { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; }
+  .mock-top { font-weight: 800; margin-bottom: 8px; }
+  .mock .row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .verdict { margin-top: 12px; background: #9a4d2a; color: #fff; display: inline-block; border-radius: 999px; padding: 6px 12px; font-weight: 800; }
+  .mock .why { color: #333; line-height: 1.55; font-size: 14px; }
+
+  .four { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .box { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .box h3 { margin: 0 0 6px; font-size: 16px; }
+  .box p { margin: 0; font-size: 13px; line-height: 1.5; color: #333; }
+  .guard {
+    margin-top: 12px; background: #1e3358; color: #fff; border-radius: 12px; padding: 12px 14px;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+  }
+  .guard b { display: block; color: #e2b15a; margin-bottom: 4px; }
+  .guard p { margin: 0; font-size: 13px; line-height: 1.45; }
+
+  .cols3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; flex: 1; }
+  .cols3 article { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .cols3 h3 { margin: 0 0 8px; font-size: 16px; }
+  .cols3 p, .cols3 li { font-size: 14px; line-height: 1.55; }
+  .mile { margin-top: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; }
+  .mile p { margin: 6px 0 0; line-height: 1.6; }
+
+  .money { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .total { margin-top: 12px; background: #1e3358; color: #fff; border-radius: 12px; padding: 12px 16px; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+  .total b { font-size: 22px; }
+
+  .reflect { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .reflect article { background: #fff; border-radius: 12px; padding: 8px 16px 14px; border-left: 5px solid var(--gold); }
+  .reflect h3 { font-size: 15px; }
+  .note { margin-top: 22px; text-align: center; color: var(--navy); font-weight: 700; line-height: 1.6; }
+
+  #chrome {
+    position: fixed; left: 0; right: 0; bottom: 14px; display: flex; justify-content: center; align-items: center; gap: 10px;
+    color: #d7dde6; font-size: 13px; z-index: 5;
+  }
+  #chrome button {
+    background: #243044; color: #fff; border: 0; border-radius: 999px; padding: 8px 14px; cursor: pointer;
+  }
+  #chrome button:hover { background: #345; }
+  #label { min-width: 280px; text-align: center; }
+  @media print {
+    #chrome { display: none; }
+    html, body { background: #fff; height: auto; overflow: visible; }
+    #viewport { display: block; }
+    #deck { transform: none !important; width: auto; height: auto; }
+    .slide { display: flex !important; position: relative; width: 1280px; height: 720px; page-break-after: always; }
+  }
+</style>
+</head>
+<body>
+<div id="viewport">
+  <div id="deck">
+
+    <section class="slide dark cover" data-title="封面">
+      <div class="cover-copy">
+        <div class="brand">FDE FORWARD DEPLOYED ENGINEERING</div>
+        <h1>智能审批流程<br />场景智改项目方案汇报</h1>
+        <p class="sub">驻场 AI 落地 · 从场景发现到价值交付</p>
+        <div class="meta">
+          汇报人　黄尊宣　第3组 · 麻辣小龙虾<br />
+          组长　张安　·　灯塔场景<br />
+          2026年10月
+        </div>
+      </div>
+      <div class="cover-art" aria-hidden="true">
+        <div class="orb o1"></div>
+        <div class="orb o2"></div>
+        <div class="orb o3"></div>
+        <div class="tag a">AI</div>
+        <div class="tag b">审批</div>
+        <div class="tag c">FDE</div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="小组介绍">
+      <div class="kicker">TEAM INTRODUCTION</div>
+      <h1>小组介绍</h1>
+      <div class="rule"></div>
+      <div class="split">
+        <div class="roster">
+          <div class="person"><div class="avatar">张</div><div><b>张安</b><span>组长 · 分析 · 请假复审 / 报销初审</span></div><span>账号 zhangan</span></div>
+          <div class="person"><div class="avatar">邱</div><div><b>邱剑锋</b><span>调研 · 报销复审 / 宣发初审</span></div><span>账号 qiujianfeng</span></div>
+          <div class="person"><div class="avatar">申</div><div><b>申佳琪</b><span>调研 · 请假初审 / 宣发复审</span></div><span>账号 shenjiaqi</span></div>
+          <div class="person"><div class="avatar">常</div><div><b>常嫕</b><span>分析 · 请假初审 / 服务器复审 / 技术支持初审</span></div><span>账号 changyi</span></div>
+          <div class="person"><div class="avatar">黄</div><div><b>黄尊宣</b><span>汇报 · 服务器初审 / 技术支持复审</span></div><span>账号 huangzunxuan</span></div>
+        </div>
+        <div class="card">
+          <span class="badge">第 3 组</span>
+          <h2>小组团建风采卡</h2>
+          <p class="lead" style="margin-top:8px">2026年10月 · 场景智改 · 选题路径 A</p>
+          <div class="slogan">少排队，不等待<br />规则清，当天批</div>
+          <ul class="tasks">
+            <li><b>选出组长</b>　张安</li>
+            <li><b>取出组名</b>　麻辣小龙虾（沿用选题卡）</li>
+            <li><b>亮出口号</b>　少排队，不等待 / 规则清，当天批</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="目录">
+      <div class="kicker">CONTENTS</div>
+      <h1>目录 · 四阶八步</h1>
+      <div class="rule"></div>
+      <p class="lead">点击任意阶段可跳到对应页。后面另有投入测算、预期价值、风险和心得。</p>
+      <div class="steps">
+        <button class="step" data-go="5"><div class="phase">01 DISCOVER</div><h2>场景发现</h2><ol><li>业务拆解</li><li>痛点收集</li></ol></button>
+        <button class="step" data-go="7"><div class="phase">02 EVALUATE</div><h2>场景评估</h2><ol><li>价值测算</li><li>可行性分析</li></ol></button>
+        <button class="step" data-go="9"><div class="phase">03 DESIGN</div><h2>场景设计</h2><ol><li>AI 能力映射</li><li>人机流程再造</li></ol></button>
+        <button class="step" data-go="14"><div class="phase">04 DELIVER</div><h2>场景落地</h2><ol><li>试点方案</li><li>规模化推广</li></ol></button>
+      </div>
+    </section>
+
+    <section class="slide" data-title="项目概览">
+      <div class="kicker">PROJECT OVERVIEW</div>
+      <h1>项目概览</h1>
+      <div class="rule"></div>
+      <div class="grid2" style="margin-bottom:14px">
+        <div class="kv"><div class="label">课题名称</div><div class="value">智能审批流程</div></div>
+        <div class="kv"><div class="label">所属</div><div class="value">灯塔场景 · 组组实际场景</div></div>
+        <div class="kv"><div class="label">汇报人 / 角色</div><div class="value">黄尊宣 · 汇报　张安 · 组长</div></div>
+        <div class="kv"><div class="label">汇报日期</div><div class="value">2026年10月</div></div>
+      </div>
+      <div class="sentence">多级审批卡在重复核对和排队上，一张单要 2～3 天。做法是：审批人自己写自动规则，需要时再对照制度规范。规则写明且规范允许的才自动通过，其余仍由原审批人处理。目标是周期从 3 天收到 1 天，人工核对耗时降 70%。</div>
+      <p class="foot">企业名称选题卡未单列，本页不另拟公司名。周期和耗时来自选题卡，不是财务台账。</p>
+    </section>
+
+    <section class="slide" data-title="场景卡片">
+      <div class="kicker">01 DISCOVER 场景发现</div>
+      <h1>AI 场景卡片</h1>
+      <div class="rule"></div>
+      <div class="grid6">
+        <div class="kv"><div class="label">主题</div><div class="value">多级审批里的重复核对与排队</div></div>
+        <div class="kv"><div class="label">要素</div><div class="value">申请人、两级或签、个人规则、五类制度</div></div>
+        <div class="kv"><div class="label">价值</div><div class="value">周期 3 天 → 1 天<br />核对耗时 −70%</div></div>
+        <div class="kv"><div class="label">数据</div><div class="value">历史审批单（待接入）<br />已整理 5 份规范</div></div>
+        <div class="kv"><div class="label">技术</div><div class="value">网页审批台、SQLite、Redis 向量、本地中文向量模型</div></div>
+        <div class="kv"><div class="label">指标</div><div class="value">自动通过必须规则同意且规范不禁止；否则转人工</div></div>
+      </div>
+      <p class="foot">五类单据：请假、费用报销、服务器申请、宣发活动、技术支持。每条都是初审再到复审。</p>
+    </section>
+
+    <section class="slide" data-title="业务拆解">
+      <div class="kicker">01 DISCOVER · ① 业务拆解</div>
+      <h1>从价值链落到每天在做的事</h1>
+      <div class="rule"></div>
+      <div class="chain">
+        <div class="lvl">
+          <em>L1 价值链</em>
+          <h3>行政与资源协同</h3>
+          <p>请假、报销、服务器、宣发、技术支持，都要先有人批，后面的工作才能动。</p>
+        </div>
+        <div class="arrow">→</div>
+        <div class="lvl">
+          <em>L2 业务流</em>
+          <h3>申请 → 初审 → 复审</h3>
+          <p>请假初审是申佳琪或常嫕，一人通过即可，再由张安复审。其余四条同样是两级或签。</p>
+        </div>
+        <div class="arrow">→</div>
+        <div class="lvl">
+          <em>L3 任务项</em>
+          <h3>核对、排队、放行</h3>
+          <p>核对天数、金额、事由是否越界；排队等当前节点的人；决定通过、拒绝，或转人工。</p>
+        </div>
+      </div>
+      <p class="foot">不停留在「做审批」。每天发生的动作是核对这一张单，并等待下一岗。</p>
+    </section>
+
+    <section class="slide" data-title="痛点收集">
+      <div class="kicker">01 DISCOVER · ② 痛点收集</div>
+      <h1>痛点收集</h1>
+      <div class="rule"></div>
+      <table>
+        <thead><tr><th style="width:52px">#</th><th style="width:72px">视角</th><th>痛点</th><th>数字依据</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>一线</td><td>多级流转里重复核对，单子停在排队上</td><td class="num">卡住 2～3 天</td></tr>
+          <tr><td>2</td><td>主管</td><td>人工核对占处理时间的大头</td><td class="num">目标 −70%</td></tr>
+          <tr><td>3</td><td>主管</td><td>整条周期被排队拉长</td><td class="num">现状按 3 天，目标 1 天</td></tr>
+          <tr><td>4</td><td>一线</td><td>短假、小额也要走完固定级数</td><td class="num">5 条流程都是 2 级</td></tr>
+          <tr><td>5</td><td>主管</td><td>个人尺度和制度不一致</td><td class="num">请假：个人规则「小于 3 天」；规范「超过 3 天不得自动通过」</td></tr>
+          <tr><td>6</td><td>一线</td><td>五类单阈值不同，靠记忆核对</td><td class="num">5 份规范，阈值各不相同</td></tr>
+          <tr><td>7</td><td>主管</td><td>没写规则的节点不会自动处理</td><td class="num">目前只有 2 条自动规则</td></tr>
+          <tr><td>8</td><td>申请人</td><td>还没轮到的人也不该提前看到单</td><td class="num">未到达节点不可见</td></tr>
+          <tr><td>9</td><td>主管</td><td>天数或金额不成立，仍可能被当成普通单传下去</td><td class="num">天数 ≤0、金额 ≤0：规范要求拒绝</td></tr>
+          <tr><td>10</td><td>下游</td><td>服务器、宣发、技术支持还没有自动规则</td><td class="num">这 3 条流程的自动规则为 0</td></tr>
+        </tbody>
+      </table>
+      <p class="foot">第 1～3 条来自选题卡。第 4～10 条来自已经配好的流程和规范，不是企业财务台账。</p>
+    </section>
+
+    <section class="slide" data-title="价值测算">
+      <div class="kicker">02 EVALUATE · ③ 价值测算</div>
+      <h1>价值测算：五维打分</h1>
+      <div class="rule"></div>
+      <table>
+        <thead><tr><th>价值维度</th><th>得分</th><th>打分依据</th><th>量化效果</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>降本</td><td class="num">4</td><td>核对耗时目标降 70%</td><td>不折算成年省万元</td><td>没有人力单价</td></tr>
+          <tr><td>增效</td><td class="num">5</td><td>周期从 3 天收到 1 天</td><td>缩短 2 天，约 67%</td><td>选题卡目标</td></tr>
+          <tr><td>提质</td><td class="num">4</td><td>规范可以否决自动通过</td><td>不报虚假准确率</td><td>没有历史差错率</td></tr>
+          <tr><td>增收</td><td class="num">2</td><td>内部效率，不直接产生收入</td><td>增收 0 元</td><td>故意给低分</td></tr>
+          <tr><td>控险</td><td class="num">4</td><td>应拒绝的拒绝，不该自动过的转人工</td><td>不合规自动放行按 0 容忍</td><td>试点抽检线</td></tr>
+        </tbody>
+      </table>
+      <p class="lead" style="margin-top:12px"><b>19 / 25。</b> 一张单卡在重复核对和排队上，选题口径要 2～3 天。个人规则写明且规范允许的，自动通过；其余仍由原审批人处理。目标是周期从 3 天收到 1 天，核对耗时降 70%。没有人力单价，不报年省金额。</p>
+    </section>
+
+    <section class="slide" data-title="可行性">
+      <div class="kicker">02 EVALUATE · ④ 可行性分析</div>
+      <h1>四象限定位灯塔场景</h1>
+      <div class="rule"></div>
+      <div class="side">
+        <table>
+          <thead><tr><th>可行性维度</th><th>得分</th><th>依据和短板应对</th></tr></thead>
+          <tbody>
+            <tr><td>数据资产与治理</td><td class="num">3</td><td>5 份规范已能检索。历史单据还是 0 条。应对：试点前先补近一季请假单。</td></tr>
+            <tr><td>IT 与技术设施</td><td class="num">4</td><td>网页、SQLite、Redis、本地向量模型已在本机跑通。短板是没接现有审批系统。应对：先用独立入口。</td></tr>
+            <tr><td>人才与技能储备</td><td class="num">3</td><td>审批人能写自己的规则。规范对错要业务确认。应对：知识库只由管理员改。</td></tr>
+            <tr><td>业务流程数字化</td><td class="num">4</td><td>5 条两级或签已配置。还没有会签和移动端。应对：试点只跑请假这一条。</td></tr>
+          </tbody>
+        </table>
+        <div class="quad">
+          <div class="cell hot"><b>灯塔场景</b>高价值 · 可行性中高。本课题放这里。短板是台账和对接，不假装没有。</div>
+          <div class="cell"><b>难啃骨头</b>高价值 · 低可行。若历史单补不齐，会滑到这里。</div>
+          <div class="cell"><b>锦上添花</b>低价值 · 高可行。本课题不是这类。</div>
+          <div class="cell"><b>不做</b>低价值 · 低可行。增收这一维接近这里，所以低分。</div>
+        </div>
+      </div>
+      <p class="foot">四项都不是 5 分。人员、历史数据和系统对接都写了应对。</p>
+    </section>
+
+    <section class="slide" data-title="四层架构">
+      <div class="kicker">03 DESIGN · ⑤ AI 能力映射</div>
+      <h1>四层总体架构</h1>
+      <div class="rule"></div>
+      <div class="layers">
+        <div class="layer l1"><div><b>应用层</b><span>人用的入口</span></div><p>网页审批台：登录、发起、待办、通过或驳回。管理员管用户、流程和知识库。审批人给每条流程单独写规则，并决定是否参考知识库。</p></div>
+        <div class="layer l2"><div><b>编排层</b><span>一次判断，不是一群 Agent</span></div><p>单据走到某个人、且这个人打开了自动规则时，才调用一次助手。结论只有通过、拒绝、转人工。没开规则的节点直接等人，不调用模型。</p></div>
+        <div class="layer l3"><div><b>模型层</b><span>对话模型 + 本地检索</span></div><p>对话走 OpenRouter 免费模型，优先 Laguna，失败再换。检索用本机 bge-large-zh-v1.5，1024 维。知识库打开时，个人规则和检索到的规范一起判：规范说不得自动通过，就不能通过。</p></div>
+        <div class="layer l4"><div><b>数据层</b><span>业务库和向量库分开</span></div><p>用户、流程、单据、规则、日志在 SQLite。规范切片和向量在 Redis。管理员看全部单据；其他人只能看到自己发起的，或已经走到自己这一岗的。</p></div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="数据资产">
+      <div class="kicker">03 DESIGN · ⑥ 数体</div>
+      <h1>数据资产盘点与就绪度</h1>
+      <div class="rule"></div>
+      <div class="side">
+        <table>
+          <thead><tr><th>数据项</th><th>来源</th><th>体量</th><th>就绪度</th></tr></thead>
+          <tbody>
+            <tr><td>五类制度规范</td><td>管理员维护的文本</td><td>5 份，演示中各 1 段</td><td class="num">75</td></tr>
+            <tr><td>个人自动规则</td><td>审批人自己写</td><td>现有 2 条，均可随时改</td><td class="num">70</td></tr>
+            <tr><td>流程定义</td><td>管理员配置</td><td>5 条流程，每条 2 级</td><td class="num">80</td></tr>
+            <tr><td>在办单据</td><td>申请人填写</td><td>演示有样例，不是全量</td><td class="num">55</td></tr>
+            <tr><td>历史审批单</td><td>选题写明，尚未接入</td><td>0 条</td><td class="num">40</td></tr>
+          </tbody>
+        </table>
+        <div>
+          <div class="card" style="margin-bottom:10px">
+            <div class="label">数据就绪度总评</div>
+            <div class="score">70 <small>/ 100</small></div>
+            <p class="lead" style="margin:0">完整 18 + 准确 22 + 时效 14 + 可得 16。规范能用，历史台账还不能用。</p>
+          </div>
+          <div class="card">
+            <b>补采计划</b>
+            <p class="lead" style="margin:8px 0 0">1. 近一季请假单：邱剑锋、申佳琪，第 1 周。<br />2. 五份规范由业务确认：常嫕、张安，第 1 周。<br />3. 单量、时长、人力单价：黄尊宣，第 2 周。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="流程再造">
+      <div class="kicker">03 DESIGN · ⑥ 智体</div>
+      <h1>人机流程再造</h1>
+      <div class="rule"></div>
+      <div class="ba">
+        <div class="before">
+          <h3>现在 · 纯人工</h3>
+          <ol>
+            <li>填写申请</li>
+            <li>初审人翻规范、排队</li>
+            <li>初审通过（或签一人即可）</li>
+            <li>复审人再翻一遍、再排队</li>
+            <li>结束，或退回重填</li>
+          </ol>
+          <div class="time">耗时：周期按 3 天<br />涉及：申请人 + 两级审批人</div>
+        </div>
+        <div class="after">
+          <h3>再造 · 人机协同</h3>
+          <ol>
+            <li>填写申请，字段不变</li>
+            <li>当前审批人若打开规则，助手判断一次</li>
+            <li>规则同意且规范允许：自动通过</li>
+            <li>规范要求拒绝：拒绝。其余：转人工</li>
+            <li>下一岗重复同一规则，人只处理例外</li>
+          </ol>
+          <div class="time">目标：周期 1 天 · 核对耗时 −70%<br />审批权仍在原节点的人身上</div>
+        </div>
+      </div>
+      <p class="foot">助手不做的事：没开规则不判；规则没写到的不自动通过；规范说不得自动通过就转人工。</p>
+    </section>
+
+    <section class="slide" data-title="Demo">
+      <div class="kicker">03 DESIGN · ⑥ 原型 Demo</div>
+      <h1>原型 Demo 展示</h1>
+      <div class="rule"></div>
+      <div class="demo">
+        <div class="mock">
+          <div class="mock-top">已在页面验证的一次判断</div>
+          <div class="row"><span>单据</span><b>事假 · 6 天</b></div>
+          <div class="row"><span>节点</span><b>复审 · 张安</b></div>
+          <div class="row"><span>当时的个人规则</span><b>10 天以内可以自动通过</b></div>
+          <div class="row"><span>参考知识库</span><b>打开</b></div>
+          <div class="verdict">转人工</div>
+          <p class="why">理由写明参考了《请假规范》：事假超过 5 天不得自动通过。个人规则被规范否决。验证后，规则已恢复为「天数小于 3 才自动通过」，知识库开关仍开着。</p>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px">Demo 说明</h3>
+          <p class="lead">演示的是审批台，不是聊天窗口。符合条件才自动过，越界必须留下人和理由。</p>
+          <div class="kv" style="margin-bottom:8px"><div class="label">核心功能</div><div class="value" style="font-size:15px">五条流程、或签、每人每流程一条规则、知识库开关、可见性、判断日志</div></div>
+          <div class="kv" style="margin-bottom:8px"><div class="label">关键路径</div><div class="value" style="font-size:15px">登录 → 发起 → 当前节点判断 → 通过 / 拒绝 / 转人工 → 日志可回看</div></div>
+          <div class="kv"><div class="label">版本</div><div class="value" style="font-size:15px">课程演示。开发 3000 端口，测试 3100 端口（打包启动）</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="可信度">
+      <div class="kicker">03 DESIGN · ⑥ 可信度保障</div>
+      <h1>可信度保障</h1>
+      <div class="rule"></div>
+      <div class="four">
+        <div class="box"><h3>幻觉编造</h3><p>最怕编出天数、金额，或编一个不存在的制度。防控：只给本单字段和检索到的片段；结论只收通过、拒绝、转人工三种。</p></div>
+        <div class="box"><h3>越权与失控</h3><p>最怕不该过的单自动过，或没轮到的人看到单。防控：只处理当前节点；可见性按是否已走到；没开规则就不调用。</p></div>
+        <div class="box"><h3>数据泄露</h3><p>单据字段会进入外部对话模型。防控：试点先少传字段；正式环境换成内网模型。这是当前短板，不回避。</p></div>
+        <div class="box"><h3>不可解释</h3><p>每次判断留下模型和理由。参考了哪份规范会写在单据上。可以按最新规则重新判断。</p></div>
+      </div>
+      <div class="guard">
+        <div><b>① 输入可控</b><p>不把整库塞进提示，只用命中的片段。</p></div>
+        <div><b>② 检索可溯</b><p>不够近的不引用，最多留下 2 条。</p></div>
+        <div><b>③ 输出可验</b><p>规范禁止自动通过时，结果不能是通过。</p></div>
+        <div><b>④ 行为可管</b><p>人仍可驳回。判断写进活动日志。</p></div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="试点方案">
+      <div class="kicker">04 DELIVER · ⑦ 试点方案</div>
+      <h1>试点方案：先跑请假一条线</h1>
+      <div class="rule"></div>
+      <div class="cols3">
+        <article>
+          <h3>试点范围</h3>
+          <p>只开请假审批。初审申佳琪或常嫕，复审张安。申请人先控制在 5 人以内。报销和另外三条先不动。</p>
+        </article>
+        <article>
+          <h3>试点周期</h3>
+          <p>6 周。前 4 周跑通，后 2 周只看数，不扩范围。</p>
+        </article>
+        <article>
+          <h3>成功标准</h3>
+          <ul>
+            <li>请假周期中位数 ≤ 1 天（基线 3 天）</li>
+            <li>规则覆盖且规范允许的单，人工核对耗时 −70%</li>
+            <li>自动通过单抽检，不合规 0 笔</li>
+          </ul>
+        </article>
+      </div>
+      <div class="mile">
+        <b>里程碑</b>
+        <p>第 1 周：确认《请假规范》，导出近一季请假单。第 2 周：张安写好规则并打开知识库，用历史单回放。第 3 周：5 人以内真人提单。第 4 周：只修误放行和误转人工。第 5～6 周：用周期和抽检决定要不要复制到报销。</p>
+      </div>
+    </section>
+
+    <section class="slide" data-title="规模化">
+      <div class="kicker">04 DELIVER · ⑧ 规模化推广</div>
+      <h1>从试点到铺开</h1>
+      <div class="rule"></div>
+      <div class="cols3">
+        <article>
+          <h3>第一阶段 · 试点验证</h3>
+          <p>时间：第 1～6 周<br />范围：请假审批<br />目标：跑通，且自动通过单不合规为 0<br />产出：验证报告</p>
+        </article>
+        <article>
+          <h3>第二阶段 · 横向复制</h3>
+          <p>时间：第 7～10 周<br />范围：报销、服务器、宣发、技术支持<br />目标：每条都有规范和节点规则<br />产出：五条流程的操作说明</p>
+        </article>
+        <article>
+          <h3>第三阶段 · 接到现用入口</h3>
+          <p>时间：第 11 周之后<br />范围：部门正在用的审批入口<br />目标：换入口后，不该过的仍然不自动过<br />产出：对接方案，而不是再做一个孤岛</p>
+        </article>
+      </div>
+      <p class="foot">不写「全公司」。选题没有企业范围，推广停在已经存在的这五条流程和现用入口。</p>
+    </section>
+
+    <section class="slide" data-title="投入成本">
+      <div class="kicker">ROI FORECASTING</div>
+      <h1>投入成本测算</h1>
+      <div class="rule"></div>
+      <div class="money">
+        <div>
+          <b>一次性投入</b>
+          <table style="margin-top:8px">
+            <thead><tr><th>项目</th><th>测算依据</th><th>万元</th></tr></thead>
+            <tbody>
+              <tr><td>模型与算力</td><td>演示用免费额度，不按次付费</td><td class="num">0</td></tr>
+              <tr><td>向量库</td><td>本机 Redis，无订阅</td><td class="num">0</td></tr>
+              <tr><td>数据治理</td><td>调研 2 人 × 3 天，分析 2 人 × 2 天</td><td class="num">0</td></tr>
+              <tr><td>开发</td><td>课程 Demo 已完成，无新增合同</td><td class="num">0</td></tr>
+              <tr><td>培训</td><td>1 场，审批人 5 人</td><td class="num">0</td></tr>
+              <tr><td>小计</td><td>现金合计</td><td class="num">0</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <b>年度运营（演示年）</b>
+          <table style="margin-top:8px">
+            <thead><tr><th>项目</th><th>测算依据</th><th>万元/年</th></tr></thead>
+            <tbody>
+              <tr><td>模型调用</td><td>演示免费；正式内网部署另计</td><td class="num">0</td></tr>
+              <tr><td>平台</td><td>本机，无席位费</td><td class="num">0</td></tr>
+              <tr><td>运维</td><td>演示阶段由小组自己看</td><td class="num">0</td></tr>
+              <tr><td>知识库维护</td><td>一年按 4 次修订，每次 0.5 人天</td><td class="num">0</td></tr>
+              <tr><td>小计</td><td>现金合计</td><td class="num">0</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="total"><div>首年现金投入 <b>0 万元</b></div><div>不含大家自己的学习时间，不含正式环境的模型和对接报价。测算看到 2026 年 12 月。</div></div>
+    </section>
+
+    <section class="slide" data-title="预期价值">
+      <div class="kicker">EXPECTED IMPACT</div>
+      <h1>预期效果与价值</h1>
+      <div class="rule"></div>
+      <div class="grid3">
+        <div class="kv"><div class="label">直接经济效益</div><div class="value">不报年省金额<br />核对耗时目标 −70%</div></div>
+        <div class="kv"><div class="label">效率提升</div><div class="value">周期 3 天 → 1 天<br />缩短 2 天，约 67%</div></div>
+        <div class="kv"><div class="label">质量与风控</div><div class="value">自动通过单不合规 0 笔<br />作为试点否决线</div></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <b>100 字价值故事</b>
+        <p class="lead" style="margin:8px 0 0">一张单卡在重复核对和排队上，选题口径要 2～3 天。个人规则写明且规范允许的，自动通过；其余仍由原审批人处理。目标是周期从 3 天收到 1 天，核对耗时降 70%。没有人力单价，不报年省金额。</p>
+      </div>
+    </section>
+
+    <section class="slide" data-title="风险与资源">
+      <div class="kicker">RISK &amp; RESOURCES</div>
+      <h1>风险识别与资源需求</h1>
+      <div class="rule"></div>
+      <div class="side">
+        <table>
+          <thead><tr><th>风险点</th><th>程度</th><th>应对</th></tr></thead>
+          <tbody>
+            <tr><td>历史台账不足，价值数字站不住</td><td class="num">高</td><td>没有近一季请假单，不扩大到第二条流程</td></tr>
+            <tr><td>单据字段进入外部模型</td><td class="num">高</td><td>试点少传字段；正式改内网模型</td></tr>
+            <tr><td>规则写错，不该过的单自动过</td><td class="num">高</td><td>规范可以否决；上线前回放；抽检自动通过单</td></tr>
+            <tr><td>免费模型限流，判断失败</td><td class="num">中</td><td>失败就转人工，单据不卡住</td></tr>
+            <tr><td>审批人担心位置被拿走</td><td class="num">中</td><td>规则默认要自己开；例外仍由本人批</td></tr>
+          </tbody>
+        </table>
+        <div class="card">
+          <h3 style="margin-top:0">资源需求</h3>
+          <p>人力：小组 5 人。试点审批人就是现有的申佳琪、常嫕、张安。</p>
+          <p>预算：演示 0 万元。正式报价另做。</p>
+          <p>数据：请假字段、《请假规范》、近一季单据。</p>
+          <p>时间：6 周试点。</p>
+          <p>其他：开发环境 3000 端口，测试环境 3100 端口，向量库用本机 Redis，两套数据分开。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide" data-title="学习心得">
+      <div class="kicker">LEARNING · TEAM · DEVELOPMENT</div>
+      <h1>学习心得 · 团队体验 · 主体发展</h1>
+      <div class="rule"></div>
+      <div class="reflect">
+        <article>
+          <h3>个人心得</h3>
+          <p>自动通过比转人工更危险。所以规范可以否决个人规则，不能反过来。</p>
+        </article>
+        <article>
+          <h3>团队体验</h3>
+          <p>把五条流程和五份规范对齐，比做一个什么都能聊的窗口有用。没走到的人看不到单，这个边界也得先定。</p>
+        </article>
+        <article>
+          <h3>主体发展</h3>
+          <p>现在的长处是场景能演示。后卫是没有企业台账，模型还在外网。下一步只拿请假回放历史单。</p>
+        </article>
+      </div>
+      <p class="note">三句话都来自已经做出来的 Demo，不另编个人故事。<br />组内照片可以在正式汇报时补上这一页。</p>
+    </section>
+
+    <section class="slide dark cover" data-title="致谢">
+      <div class="cover-copy">
+        <div class="brand">FDE FORWARD DEPLOYED ENGINEERING</div>
+        <h1>感谢聆听</h1>
+        <p class="sub">驻场 AI 落地 · 从场景发现到价值交付</p>
+        <div class="rule"></div>
+        <div class="meta">
+          第3组 · 麻辣小龙虾<br />
+          智能审批流程 · 场景智改<br />
+          2026年10月
+        </div>
+      </div>
+      <div class="cover-art" aria-hidden="true">
+        <div class="orb o1"></div>
+        <div class="orb o2"></div>
+        <div class="orb o3"></div>
+        <div class="tag a">AI</div>
+        <div class="tag b">FDE</div>
+        <div class="tag c">审批</div>
+      </div>
+    </section>
+
+  </div>
+</div>
+<div id="chrome">
+  <button type="button" id="prev">上一页</button>
+  <div id="label">1 / 21　封面</div>
+  <button type="button" id="next">下一页</button>
+</div>
+<script>
+  const slides = [...document.querySelectorAll(".slide")];
+  const label = document.getElementById("label");
+  let i = 0;
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, idx) => s.classList.toggle("on", idx === i));
+    label.textContent = (i + 1) + " / " + slides.length + "　" + (slides[i].dataset.title || "");
+    history.replaceState(null, "", "#" + (i + 1));
+  }
+  function fit() {
+    const s = Math.min(window.innerWidth / 1280, (window.innerHeight - 64) / 720);
+    document.getElementById("deck").style.transform = "scale(" + s + ")";
+  }
+  document.getElementById("prev").onclick = () => show(i - 1);
+  document.getElementById("next").onclick = () => show(i + 1);
+  document.querySelectorAll("[data-go]").forEach((el) => {
+    el.onclick = () => show(Number(el.dataset.go));
+  });
+  window.addEventListener("keydown", (e) => {
+    if (["ArrowRight", "PageDown", " "].includes(e.key)) { e.preventDefault(); show(i + 1); }
+    if (["ArrowLeft", "PageUp", "Backspace"].includes(e.key)) { e.preventDefault(); show(i - 1); }
+    if (e.key === "Home") show(0);
+    if (e.key === "End") show(slides.length - 1);
+  });
+  window.addEventListener("resize", fit);
+  const start = Math.max(0, (parseInt(location.hash.slice(1), 10) || 1) - 1);
+  fit();
+  show(start);
+</script>
+</body>
+</html>

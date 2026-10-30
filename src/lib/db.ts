@@ -3,6 +3,7 @@ import path from "node:path";
 import { DatabaseSync, type SqlValue } from "node:sqlite";
 import { hashPassword } from "@/lib/password";
 import { builtinKnowledge } from "@/lib/knowledge-docs";
+import { ensureFeatureSchema } from "@/lib/feature-schema";
 
 type Database = InstanceType<typeof DatabaseSync>;
 
@@ -10,9 +11,15 @@ const globalForDb = globalThis as unknown as { __approvalDb?: Database };
 
 export type SqlParam = string | number | null;
 
+function dataDirName() {
+  const requested = process.env.DATA_DIR?.trim();
+  if (!requested || requested.includes("..") || requested.includes("/") || requested.includes("\\")) return "data";
+  return requested;
+}
+
 export function getDb() {
   if (!globalForDb.__approvalDb) {
-    const dir = path.join(process.cwd(), "data");
+    const dir = path.join(/* turbopackIgnore: true */ process.cwd(), dataDirName());
     fs.mkdirSync(dir, { recursive: true });
     const db = new DatabaseSync(path.join(dir, "app.db"));
     db.exec("PRAGMA journal_mode = WAL;");
@@ -23,6 +30,7 @@ export function getDb() {
   }
   ensureDemoData(globalForDb.__approvalDb);
   ensureKnowledgeSchema(globalForDb.__approvalDb);
+  ensureFeatureSchema(globalForDb.__approvalDb);
   return globalForDb.__approvalDb;
 }
 
@@ -192,25 +200,15 @@ function ensureDemoData(db: Database) {
     | undefined;
   if (current?.value === DATA_VERSION) return;
 
+  // Data-version changes must never erase user accounts or submitted requests.
+  const users = db.prepare("SELECT COUNT(*) AS count FROM users").get() as { count: number };
+  if (Number(users.count) > 0) {
+    db.prepare("INSERT INTO app_meta (key, value) VALUES ('data_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(DATA_VERSION);
+    return;
+  }
+
   db.exec("BEGIN IMMEDIATE");
   try {
-    for (const table of [
-      "activity_logs",
-      "ai_attempts",
-      "approvals",
-      "requests",
-      "ai_rules",
-      "knowledge_docs",
-      "workflow_step_approvers",
-      "workflow_steps",
-      "workflow_fields",
-      "workflows",
-      "sessions",
-      "users",
-    ]) {
-      const exists = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
-      if (exists) db.exec(`DELETE FROM ${table}`);
-    }
     seed(db);
     db.prepare(
       "INSERT INTO app_meta (key, value) VALUES ('data_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -266,7 +264,7 @@ function ensureKnowledgeSchema(db: Database) {
     db.prepare("INSERT INTO app_meta (key, value) VALUES ('knowledge_switch', '1')").run();
   }
 
-  if (!knowledgeIndexScheduled) {
+  if (!knowledgeIndexScheduled && process.env.SKIP_KB_INDEX !== "1") {
     knowledgeIndexScheduled = true;
     void import("@/lib/vector-store")
       .then((store) => store.reindexAll())

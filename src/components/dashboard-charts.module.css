@@ -1,0 +1,28 @@
+.grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; }
+.panel { min-width: 0; display: flex; flex-direction: column; }
+.chart { position: relative; display: flex; gap: 10px; margin-top: 16px; height: 160px; }
+.axis { width: 26px; flex-shrink: 0; display: flex; flex-direction: column; justify-content: space-between; padding: 1px 0 27px; color: var(--color-muted); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+.bars { position: relative; display: flex; align-items: stretch; justify-content: space-around; flex: 1; min-width: 0; padding-top: 9px; }
+.bars::before { position: absolute; content: ""; inset: 9px 0 30px; pointer-events: none; border-block: 1px solid var(--color-line); background: linear-gradient(to bottom, transparent calc(50% - .5px), var(--color-line) 50%, transparent calc(50% + .5px)); }
+.day { position: relative; display: flex; flex: 1; min-width: 0; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 30px; }
+.bar { position: relative; width: 42%; max-width: 26px; min-width: 3px; background: var(--color-teal); border-radius: 4px 4px 0 0; }
+.barValue { position: absolute; top: -23px; left: 50%; transform: translateX(-50%); color: var(--color-ink); font-size: 11px; font-variant-numeric: tabular-nums; }
+.dayLabel { position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--color-muted); white-space: nowrap; }
+.emptyChart { position: absolute; inset: 48px 0 auto; text-align: center; color: var(--color-muted); font-size: 13px; pointer-events: none; }
+.distribution { display: flex; justify-content: center; align-items: center; gap: 28px; flex: 1; min-height: 173px; padding-block: 18px; }
+.donut { flex-shrink: 0; display: grid; place-items: center; width: 128px; height: 128px; border-radius: 50%; }
+.donutCenter { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 98px; height: 98px; border-radius: 50%; background: white; }
+.legend { display: grid; gap: 12px; min-width: 125px; margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.legend li { display: flex; align-items: center; gap: 9px; }
+.swatch { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.legendCount { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+.footnote { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--color-line); color: var(--color-muted); font-size: 11px; line-height: 1.7; }
+.dataDisclosure { margin-top: 8px; font-size: 12px; color: var(--color-muted); }
+.dataDisclosure summary { cursor: pointer; width: fit-content; }
+.dataTable { margin-top: 10px; width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+.dataTable td, .dataTable th { padding: 6px 8px; border-bottom: 1px solid var(--color-line); }
+.dataTable th { font-weight: 500; }
+@media (max-width: 1100px) { .distribution { gap: 18px; } .donut { width: 110px; height: 110px; } .donutCenter { width: 84px; height: 84px; } }
+@media (max-width: 950px) { .grid { grid-template-columns: minmax(0, 1fr); } .distribution { gap: 40px; min-height: 190px; } }
+@media (max-width: 420px) { .distribution { gap: 18px; } .donut { width: 102px; height: 102px; } .donutCenter { width: 78px; height: 78px; } .legend { min-width: 108px; gap: 10px; font-size: 11px; } .barValue { display: none; } .dayLabel { font-size: 11px; } }
+@media (prefers-reduced-motion: no-preference) { .bar { transition: height 180ms ease; } }

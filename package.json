@@ -5,8 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:test": "node scripts/with-test-env.mjs next build",
     "start": "next start",
-    "lint": "eslint"
+    "start:test": "node scripts/with-test-env.mjs next start -p 3100",
+    "lint": "eslint src",
+    "test": "node --import ./scripts/test-register.mjs --test tests/*.test.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.2",

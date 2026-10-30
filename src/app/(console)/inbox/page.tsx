@@ -1,4 +1,5 @@
-import { Empty, PageHeader, RequestCard } from "@/components/ui";
+import { PageHeader, RequestTable } from "@/components/ui";
+import { Icon } from "@/components/icon";
 import { getCurrentUser } from "@/lib/auth";
 import { listInbox } from "@/lib/queries";
 
@@ -10,10 +11,8 @@ export default async function InboxPage() {
 
   return (
     <>
-      <PageHeader title="待我审批" description="这里只显示当前节点轮到你、而且你还没有处理的单据。AI 已经通过的节点不会再出现。" />
-      <div className="grid gap-3">
-        {items.length === 0 ? <Empty>没有待办。可以换一个发起人提交申请，或先去配置自己的自动规则。</Empty> : items.map((item) => <RequestCard key={item.id} item={item} />)}
-      </div>
+      <PageHeader title="待我审批" description="查看当前轮到你处理的申请，确认信息后完成审批。" />
+      <section className="table-shell"><div className="flex items-center gap-2 border-b border-line px-5 py-4"><Icon name="inbox" className="text-teal" /><h2 className="font-semibold">待处理事项</h2><span className="pill pill-neutral">{items.length} 项</span></div><RequestTable items={items} emptyText="当前没有待处理的审批，新的待办会显示在这里。" /></section>
     </>
   );
 }

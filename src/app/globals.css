@@ -1,21 +1,24 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink: #16332f;
-  --color-muted: #5d736e;
-  --color-line: #d5e4df;
-  --color-teal: #0f8f84;
-  --color-teal-dark: #0b726a;
-  --color-mint: #e7f6f3;
-  --color-mist: #f3f6f4;
-  --color-deep: #123f3c;
-  --color-amber: #9a6412;
-  --color-amber-bg: #fff6e8;
-  --color-rose: #a33b45;
+  --color-ink: #1f2937;
+  --color-muted: #64748b;
+  --color-line: #e5e7eb;
+  --color-teal: #0f766e;
+  --color-teal-dark: #115e59;
+  --color-mint: #eaf5f2;
+  --color-mist: #f5f7fa;
+  --color-deep: #183b36;
+  --color-amber: #a5640a;
+  --color-amber-bg: #fff5e5;
+  --color-rose: #b42332;
   --color-rose-bg: #fff0f1;
+  --color-success: #166534;
+  --color-success-bg: #edf8f0;
   --font-sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
+@layer base {
 * {
   box-sizing: border-box;
 }
@@ -30,6 +33,9 @@ body {
   background: var(--color-mist);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -43,17 +49,18 @@ a {
   color: inherit;
   text-decoration: none;
 }
+}
 
+@layer components {
 .input,
 .textarea,
 .select {
   width: 100%;
   border: 1px solid var(--color-line);
-  border-radius: 12px;
+  border-radius: 8px;
   background: white;
   padding: 0.7rem 0.85rem;
   color: var(--color-ink);
-  outline: none;
 }
 
 .textarea {
@@ -65,26 +72,30 @@ a {
 .textarea:focus,
 .select:focus {
   border-color: var(--color-teal);
-  box-shadow: 0 0 0 3px rgba(15, 143, 132, 0.15);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(15 118 110 / 10%);
 }
 
 .label {
   display: block;
   margin-bottom: 0.4rem;
-  color: var(--color-teal-dark);
-  font-size: 0.92rem;
-  font-weight: 650;
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  border-radius: 999px;
+  gap: 0.5rem;
+  min-height: 40px;
+  border-radius: 8px;
   border: 1px solid transparent;
-  padding: 0.65rem 1.1rem;
-  font-weight: 650;
+  padding: 0.6rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -105,7 +116,7 @@ a {
 .btn-danger {
   background: white;
   color: var(--color-rose);
-  border-color: #f0c6cb;
+  border-color: #f1d0d5;
 }
 
 .btn-danger:hover:not(:disabled) {
@@ -119,37 +130,40 @@ a {
 }
 
 .btn-ghost:hover:not(:disabled) {
-  border-color: var(--color-teal);
-  color: var(--color-teal-dark);
+  border-color: #c7d4d1;
+  background: var(--color-mist);
 }
 
 .card {
   border: 1px solid var(--color-line);
-  border-radius: 18px;
+  border-radius: 12px;
   background: white;
-  padding: 1.1rem 1.2rem;
+  padding: 1.25rem;
+  box-shadow: 0 2px 5px rgb(31 41 55 / 2%);
 }
 
 .card-link {
   display: block;
   border: 1px solid var(--color-line);
-  border-radius: 18px;
+  border-radius: 12px;
   background: white;
-  padding: 1rem 1.1rem;
+  padding: 1.25rem;
 }
 
 .card-link:hover {
-  border-color: #b7ddd6;
-  box-shadow: 0 8px 24px rgba(18, 63, 60, 0.05);
+  border-color: #aecdc5;
+  box-shadow: 0 4px 16px rgb(24 59 54 / 5%);
 }
 
 .pill {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
-  padding: 0.15rem 0.55rem;
-  font-size: 0.78rem;
-  font-weight: 700;
+  gap: 5px;
+  border-radius: 6px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -159,8 +173,8 @@ a {
 }
 
 .pill-approved {
-  background: var(--color-mint);
-  color: var(--color-teal-dark);
+  background: var(--color-success-bg);
+  color: var(--color-success);
 }
 
 .pill-rejected {
@@ -169,13 +183,13 @@ a {
 }
 
 .pill-ai {
-  background: #e8fbf4;
-  color: #0b7a62;
+  background: var(--color-mint);
+  color: var(--color-teal-dark);
 }
 
 .flash {
   margin-bottom: 1rem;
-  border-radius: 14px;
+  border-radius: 8px;
   padding: 0.75rem 0.9rem;
   font-size: 0.92rem;
 }
@@ -195,13 +209,40 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  border-radius: 12px;
-  padding: 0.65rem 0.75rem;
-  color: rgba(255, 255, 255, 0.76);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+  color: #c0d3cc;
+  white-space: nowrap;
+  font-size: 0.875rem;
 }
 
-.nav-link:hover,
-.nav-link-active {
-  background: rgba(255, 255, 255, 0.1);
+.nav-link:hover {
+  background: rgb(255 255 255 / 6%);
   color: white;
+}
+.nav-link-active { background: #2a5149; box-shadow: inset 3px 0 #7bcbb4; color: white; }
+.pill-neutral { background: #eef1f5; color: #5c6b7d; }
+.table-shell { overflow: hidden; border: 1px solid var(--color-line); border-radius: 12px; background: white; }
+.data-table { width: 100%; border-collapse: collapse; text-align: left; font-size: .875rem; }
+.data-table th { background: #f8fafb; padding: .8rem 1.1rem; color: var(--color-muted); font-size: .75rem; font-weight: 500; border-bottom: 1px solid var(--color-line); white-space: nowrap; }
+.data-table td { padding: 1rem 1.1rem; border-bottom: 1px solid #edf0f3; vertical-align: middle; }
+.data-table tr:last-child td { border-bottom: 0; }
+.data-table tbody tr:hover { background: #fafcfb; }
+.section-title { display: flex; align-items: center; gap: .6rem; font-size: 1rem; font-weight: 600; }
+.timeline-item { position: relative; padding: 0 0 1.25rem 1.4rem; border-left: 1px solid var(--color-line); }
+.timeline-item:last-child { border-left-color: transparent; padding-bottom: 0; }
+.timeline-dot { position: absolute; left: -5px; top: 5px; width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1; box-shadow: 0 0 0 4px white; }
+}
+
+:focus-visible { outline: 2px solid var(--color-teal); outline-offset: 4px; }
+.nav-link:focus-visible { outline-color: #a6e8d3; }
+::selection { background: #c6e8df; color: #183b36; }
+input[type="checkbox"] { accent-color: var(--color-teal); }
+.input::placeholder, .textarea::placeholder { color: #82909f; }
+@media (prefers-reduced-motion: no-preference) {
+  .btn, .card-link, .nav-link, .data-table tbody tr { transition: background-color 150ms, border-color 150ms, box-shadow 150ms, color 150ms; }
+}
+@media (pointer: coarse) {
+  .btn, .nav-link { min-height: 44px; }
+  .input, .textarea, .select { font-size: 16px; }
 }

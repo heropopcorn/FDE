@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-test/
 /out/
 
 # production
@@ -42,4 +43,8 @@ next-env.d.ts
 
 # local database and model cache
 /data
+/data-test
 /.cache
+/.test-data-*
+/.next-assistant-check/
+/.next-assistant-e2e/

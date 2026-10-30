@@ -1,6 +1,13 @@
 import { judgeApplication } from "@/lib/ai";
 import { nowIso } from "@/lib/format";
 import { hashPassword } from "@/lib/password";
+import { createHash } from "node:crypto";
+import { sqlOne, sqlRun, withTransaction } from "@/lib/db";
+import { validateRequest } from "@/lib/request-validation";
+import { approvalMode, assertApprovalLease, evaluateGuards, withApprovalLease } from "@/lib/approval-controls";
+import { redactSensitive } from "@/lib/privacy";
+import { captureKnowledgeVersion, isKnowledgeCurrent } from "@/lib/knowledge-versions";
+import { enqueueApproval } from "@/lib/approval-jobs";
 import {
   countRequests,
   deleteKnowledgeDoc,
@@ -29,7 +36,6 @@ import {
 import type {
   AiOutcome,
   FieldType,
-  FormAnswer,
   PublicUser,
   Result,
   Workflow,
@@ -46,11 +52,13 @@ function fail(error: string): Result<never> {
 
 function withRequestLock<T>(requestId: number, fn: () => Promise<T>): Promise<T> {
   const previous = locks.get(requestId) ?? Promise.resolve();
-  const current = previous.then(fn, fn);
+  const execute = () => withApprovalLease(requestId, fn);
+  const current = previous.then(execute, execute);
   locks.set(requestId, current);
-  void current.finally(() => {
+  const cleanup = () => {
     if (locks.get(requestId) === current) locks.delete(requestId);
-  });
+  };
+  void current.then(cleanup, cleanup);
   return current;
 }
 
@@ -171,7 +179,8 @@ export async function saveKnowledge(
     ? (getKnowledgeDoc(id) ? id : null)
     : insertKnowledgeDoc(trimmedTitle, trimmedContent, userId, now);
   if (!docId) return fail("规范不存在");
-  if (id) updateKnowledgeDoc(docId, trimmedTitle, trimmedContent, userId, now);
+  if (id) { captureKnowledgeVersion(docId); updateKnowledgeDoc(docId, trimmedTitle, trimmedContent, userId, now); }
+  captureKnowledgeVersion(docId);
   try {
     const { reindexDocument } = await import("@/lib/vector-store");
     await reindexDocument(docId);
@@ -185,6 +194,7 @@ export async function saveKnowledge(
 export async function removeKnowledge(id: number): Promise<Result<{ id: number }>> {
   const doc = getKnowledgeDoc(id);
   if (!doc) return fail("规范不存在");
+  captureKnowledgeVersion(id);
   deleteKnowledgeDoc(id);
   try {
     const { removeDocumentVectors } = await import("@/lib/vector-store");
@@ -195,59 +205,51 @@ export async function removeKnowledge(id: number): Promise<Result<{ id: number }
   return { ok: true, data: { id } };
 }
 
-function readAnswer(field: Workflow["fields"][number], raw: string): { value: string } | { error: string } {
-  const value = raw.trim();
-  if (!value) {
-    return field.required ? { error: `请填写${field.label}` } : { value: "" };
-  }
-  if (field.fieldType === "number") {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) return { error: `${field.label}需要填写数字` };
-    return { value: String(numeric) };
-  }
-  if (field.fieldType === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return { error: `${field.label}的日期格式不正确` };
-  }
-  if (field.fieldType === "select" && !field.options.includes(value)) {
-    return { error: `${field.label}的选项无效` };
-  }
-  const limit = field.fieldType === "textarea" ? 2000 : 200;
-  if (value.length > limit) return { error: `${field.label}太长了` };
-  return { value };
-}
-
 export async function submitRequest(
   user: PublicUser,
   workflowId: number,
   title: string,
   raw: Record<string, string>,
+  submissionKey?: string,
+  options: { waitForAutomatic?: boolean } = {},
 ): Promise<Result<{ id: number }>> {
   const workflow = getWorkflow(workflowId);
   if (!workflow) return fail("流程不存在");
   const trimmedTitle = title.trim();
-  if (!trimmedTitle || trimmedTitle.length > 80) return fail("请填写 80 字以内的申请标题");
-  if (workflow.steps.length === 0) return fail("这个流程还没有审批节点");
-
-  const form: FormAnswer[] = [];
-  for (const field of workflow.fields) {
-    const answer = readAnswer(field, raw[field.fieldKey] ?? "");
-    if ("error" in answer) return fail(answer.error);
-    form.push({ key: field.fieldKey, label: field.label, type: field.fieldType, value: answer.value });
-  }
+  const validated = validateRequest(workflow, title, raw);
+  if (!validated.ok) return validated;
+  const form = validated.data;
+  if (submissionKey && !/^[a-zA-Z0-9:_-]{8,160}$/.test(submissionKey)) return fail("提交标识无效，请刷新后重试");
+  const payloadHash = createHash("sha256").update(JSON.stringify({ workflowId, title: trimmedTitle, form })).digest("hex");
 
   const now = nowIso();
-  const requestId = insertRequest({
+  const created = withTransaction((): Result<{ id: number; replay: boolean }> => {
+    if (submissionKey) {
+      const previous = sqlOne<{ request_id: number; payload_hash: string }>("SELECT request_id, payload_hash FROM request_submissions WHERE user_id = ? AND submission_key = ?", user.id, submissionKey);
+      if (previous) return previous.payload_hash === payloadHash
+        ? { ok: true, data: { id: previous.request_id, replay: true } }
+        : fail("草稿已变更，请重新确认后提交");
+    }
+    const id = insertRequest({
     workflowId,
     title: trimmedTitle,
     form,
     initiatorId: user.id,
     currentStepOrder: workflow.steps[0].sortOrder,
     now,
+    });
+    if (submissionKey) sqlRun("INSERT INTO request_submissions (user_id, submission_key, payload_hash, request_id) VALUES (?, ?, ?, ?)", user.id, submissionKey, payloadHash, id);
+    insertLog(id, `${user.displayName} 发起了申请`, now);
+    enqueueApproval(id);
+    return { ok: true, data: { id, replay: false } };
   });
-  insertLog(requestId, `${user.displayName} 发起了申请`, now);
+  if (!created.ok) return created;
+  const requestId = created.data.id;
+  if (created.data.replay) return { ok: true, data: { id: requestId } };
+  if (options.waitForAutomatic === false) return { ok: true, data: { id: requestId } };
 
   try {
-    await withRequestLock(requestId, () => settle(requestId));
+    await resumeApprovalRequest(requestId);
   } catch (error) {
     insertLog(requestId, `自动审批中断：${error instanceof Error ? error.message : "未知错误"}`, nowIso());
   }
@@ -261,10 +263,12 @@ export async function decideRequest(
   comment: string,
 ): Promise<Result<{ id: number }>> {
   const note = comment.trim();
+  if (!Number.isSafeInteger(requestId) || requestId < 1 || !getRequestCore(requestId)) return fail("申请不存在");
+  if (decision !== "approved" && decision !== "rejected") return fail("审批决定不正确");
   if (note.length > 500) return fail("意见不能超过 500 字");
   if (decision === "rejected" && !note) return fail("驳回时请填写意见");
 
-  return withRequestLock(requestId, async () => {
+  return withRequestLock<Result<{ id: number }>>(requestId, async () => {
     const request = getRequestCore(requestId);
     if (!request) return fail("申请不存在");
     if (request.status !== "pending" || request.currentStepOrder == null) return fail("这份申请已经结束");
@@ -280,7 +284,9 @@ export async function decideRequest(
     if (step.approveMode === "any" && approvals.length > 0) return fail("这个节点已经有人处理");
 
     const now = nowIso();
+    assertApprovalLease(requestId);
     try {
+      withTransaction(() => {
       insertApproval({
         requestId,
         stepId: step.id,
@@ -291,24 +297,22 @@ export async function decideRequest(
         aiReason: "",
         now,
       });
+      insertLog(requestId, note ? `${user.displayName} ${decision === "approved" ? "通过" : "驳回"}了审批：${note}` : `${user.displayName} 通过了审批`, now);
+      enqueueApproval(requestId);
+      });
     } catch (error) {
       if (String(error).includes("UNIQUE")) return fail("你已经处理过这个节点");
       throw error;
     }
-    insertLog(
-      requestId,
-      note
-        ? `${user.displayName} ${decision === "approved" ? "通过" : "驳回"}了审批：${note}`
-        : `${user.displayName} 通过了审批`,
-      now,
-    );
-    await settle(requestId);
+    try { await settleTracked(requestId); }
+    catch { insertLog(requestId, "审批意见已保存，后续处理进入恢复队列", nowIso()); }
     return { ok: true, data: { id: requestId } };
-  });
+  }).catch(error => fail(error instanceof Error ? redactSensitive(error.message) : "处理暂时中断，请稍后重试"));
 }
 
 export async function retryAutomatic(user: PublicUser, requestId: number): Promise<Result<{ id: number }>> {
-  return withRequestLock(requestId, async () => {
+  if (!Number.isSafeInteger(requestId) || requestId < 1 || !getRequestCore(requestId)) return fail("申请不存在");
+  return withRequestLock<Result<{ id: number }>>(requestId, async () => {
     const request = getRequestCore(requestId);
     if (!request) return fail("申请不存在");
     if (request.status !== "pending" || request.currentStepOrder == null) return fail("这份申请已经结束");
@@ -321,11 +325,34 @@ export async function retryAutomatic(user: PublicUser, requestId: number): Promi
       step.approvers.some((approver) => approver.id === user.id);
     if (!involved) return fail("你不能重试这份申请的自动审批");
 
-    deleteRetryableAttempts(requestId, step.id);
-    insertLog(requestId, `${user.displayName} 按最新规则重新判断当前节点`, nowIso());
-    await settle(requestId);
+    withTransaction(() => {
+      deleteRetryableAttempts(requestId, step.id);
+      insertLog(requestId, `${user.displayName} 按最新规则重新判断当前节点`, nowIso());
+      enqueueApproval(requestId);
+    });
+    await settleTracked(requestId);
     return { ok: true, data: { id: requestId } };
-  });
+  }).catch(error => fail(error instanceof Error ? redactSensitive(error.message) : "处理暂时中断，请稍后重试"));
+}
+
+export function resumeApprovalRequest(requestId: number) {
+  return withRequestLock(requestId, () => settleTracked(requestId));
+}
+
+async function settleTracked(requestId: number) {
+  const job = sqlOne<{ generation: number; attempts: number; state: string }>("SELECT generation, attempts, state FROM approval_jobs WHERE request_id = ?", requestId);
+  if (!job || job.state !== "queued") return;
+  try {
+    await settle(requestId);
+    assertApprovalLease(requestId);
+    sqlRun("UPDATE approval_jobs SET state = 'done', last_error = '', updated_at = ? WHERE request_id = ? AND generation = ?", nowIso(), requestId, job.generation);
+  } catch (error) {
+    // A stale worker must not overwrite the current worker's result.
+    assertApprovalLease(requestId);
+    const attempts = job.attempts + 1;
+    sqlRun("UPDATE approval_jobs SET state = ?, attempts = ?, retry_at = ?, last_error = ?, updated_at = ? WHERE request_id = ? AND generation = ?", attempts >= 5 ? "failed" : "queued", attempts, Date.now() + Math.min(300000, 10000 * 2 ** attempts), redactSensitive(error instanceof Error ? error.message : "处理失败").slice(0, 500), nowIso(), requestId, job.generation);
+    throw error;
+  }
 }
 
 async function settle(requestId: number) {
@@ -341,6 +368,7 @@ async function settle(requestId: number) {
     }
 
     await runAi(request, workflow, step);
+    assertApprovalLease(requestId);
     const outcome = evaluate(requestId, step);
     if (outcome === "wait") return;
     if (outcome === "rejected") {
@@ -384,7 +412,10 @@ async function runAi(
   workflow: Workflow,
   step: WorkflowStep,
 ) {
+  if (approvalMode() === "paused") return;
   const approvals = listApprovals(request.id).filter((item) => item.stepId === step.id);
+  // A human may have already decided this node before the automatic pass starts.
+  if (approvals.some(item => item.decision === "rejected") || (step.approveMode === "any" && approvals.length > 0)) return;
   const attempts = listAttempts(request.id).filter((item) => item.stepId === step.id);
   for (const approver of step.approvers) {
     if (approvals.some((item) => item.approverId === approver.id)) continue;
@@ -392,12 +423,12 @@ async function runAi(
     const rule = getRule(approver.id, workflow.id);
     if (!rule || rule.enabled !== 1 || !rule.rule_text.trim()) continue;
 
+    const guardReason = evaluateGuards(workflow.id, request.form);
     const formText = request.form.map((field) => `${field.label}：${field.value}`).join("\n");
-    const { searchKnowledge } = await import("@/lib/vector-store");
-    const knowledge = rule.use_knowledge === 1
-      ? await searchKnowledge(`${workflow.name}\n${request.title}\n${formText}`)
+    const knowledge = rule.use_knowledge === 1 && !guardReason
+      ? await (await import("@/lib/vector-store")).searchKnowledge(`${workflow.name}\n${request.title}\n${formText}`)
       : { available: true, hits: [], error: "" };
-    const judgement = await judgeApplication({
+    const judgement = guardReason ? { decision: "manual" as const, reason: guardReason, model: "", knowledgeRefs: "" } : await judgeApplication({
       rule: rule.rule_text,
       useKnowledge: rule.use_knowledge === 1,
       knowledgeAvailable: knowledge.available,
@@ -408,21 +439,36 @@ async function runAi(
       title: request.title,
       form: request.form,
     });
+    assertApprovalLease(request.id);
     const now = nowIso();
-    const outcome: AiOutcome = judgement.decision;
+    const mode = approvalMode();
+    const latestRule = getRule(approver.id, workflow.id);
+    const currentRequest = getRequestCore(request.id);
+    if (!currentRequest || currentRequest.status !== "pending" || currentRequest.currentStepOrder !== step.sortOrder) return;
+    const lateGuard = evaluateGuards(workflow.id, request.form);
+    let outcome: AiOutcome = judgement.decision;
+    let reason = judgement.reason;
+    if (mode === "paused") { outcome = "manual"; reason = "自动审批已暂停，请人工处理"; }
+    else if (!latestRule || latestRule.enabled !== 1 || latestRule.rule_text !== rule.rule_text || latestRule.use_knowledge !== rule.use_knowledge) { outcome = "manual"; reason = "个人规则在判断期间发生变化，请重新判断或人工处理"; }
+    else if (lateGuard) { outcome = "manual"; reason = lateGuard; }
+    else if (!isKnowledgeCurrent(knowledge.hits)) { outcome = "manual"; reason = "引用制度在判断期间发生变化，请重新判断或人工确认"; }
+    const automatic = mode === "automatic" && (outcome === "approve" || outcome === "reject");
+    if (mode === "suggestion" && (outcome === "approve" || outcome === "reject")) reason = `建议${outcome === "approve" ? "通过" : "驳回"}，等待审批人确认：${reason}`;
+    withTransaction(() => {
+    sqlRun("INSERT INTO ai_evidence (request_id, step_id, approver_id, snapshot_json, created_at) VALUES (?, ?, ?, ?, ?)", request.id, step.id, approver.id, JSON.stringify({ rule: rule.rule_text, ruleVersion: createHash("sha256").update(rule.rule_text).digest("hex"), formHash: createHash("sha256").update(JSON.stringify(request.form)).digest("hex"), knowledge: knowledge.hits, mode, outcome, reason, model: judgement.model, automatic }), now);
     insertAttempt({
       requestId: request.id,
       stepId: step.id,
       approverId: approver.id,
       outcome,
-      reason: judgement.reason,
+      reason,
       model: judgement.model,
       knowledgeRefs: judgement.knowledgeRefs,
       now,
     });
 
     const reference = judgement.knowledgeRefs ? `，参考了《${judgement.knowledgeRefs.replaceAll("、", "》《")}》` : "";
-    if (outcome === "approve" || outcome === "reject") {
+    if (automatic) {
       insertApproval({
         requestId: request.id,
         stepId: step.id,
@@ -430,19 +476,21 @@ async function runAi(
         decision: outcome === "approve" ? "approved" : "rejected",
         comment: "",
         source: "ai",
-        aiReason: judgement.reason,
+        aiReason: reason,
         now,
       });
       const verb = outcome === "approve" ? "自动通过" : "自动驳回";
       const model = judgement.model ? `（${judgement.model}）` : "";
-      insertLog(request.id, `AI 按「${approver.displayName}」的规则${verb}${reference}${model}：${judgement.reason}`, now);
-      touchRequest(request.id, now);
-      if (step.approveMode === "any") return;
+      insertLog(request.id, `AI 按「${approver.displayName}」的规则${verb}${reference}${model}：${reason}`, now);
     } else if (outcome === "manual") {
-      insertLog(request.id, `「${approver.displayName}」的规则未自动处理${reference}：${judgement.reason}`, now);
+      insertLog(request.id, `「${approver.displayName}」的规则未自动处理${reference}：${reason}`, now);
+    } else if (mode === "suggestion" && (outcome === "approve" || outcome === "reject")) {
+      insertLog(request.id, `「${approver.displayName}」收到 AI 建议${reference}：${reason}`, now);
     } else {
-      insertLog(request.id, `调用 AI 失败（${approver.displayName}）：${judgement.reason}`, now);
+      insertLog(request.id, `调用 AI 失败（${approver.displayName}）：${redactSensitive(reason)}`, now);
     }
     touchRequest(request.id, now);
+    });
+    if (automatic && step.approveMode === "any") return;
   }
 }

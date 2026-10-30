@@ -53,7 +53,9 @@ export async function startRequestAction(formData: FormData) {
   for (const [key, value] of formData.entries()) {
     if (key.startsWith("field:") && typeof value === "string") raw[key.slice(6)] = value;
   }
-  const result = await submitRequest(user, workflowId, String(formData.get("title") ?? ""), raw);
+  const key = String(formData.get("submissionKey") ?? "");
+  if (!key) bounce(`/start/${workflowId || ""}`, "表单已过期，请刷新后重新填写");
+  const result = await submitRequest(user, workflowId, String(formData.get("title") ?? ""), raw, `form:${key}`);
   if (!result.ok) bounce(`/start/${workflowId || ""}`, result.error);
   refresh();
   redirect(`/requests/${result.data.id}`);
